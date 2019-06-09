@@ -52,7 +52,7 @@ int main(int argc, char* argv[])
 
     int key;
     while (true){
-        key = GetKeyboardCommand(COMMANDS);
+	key = GetKeyboardCommand(COMMANDS);
         boost::asio::write(s, boost::asio::buffer(COMMANDS[key].c_str(), strlen(COMMANDS[key].c_str())));
     }
 

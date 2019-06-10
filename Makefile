@@ -1,4 +1,5 @@
-BOOST_DIR = /home/tannerbitz/Documents/cpp/boost_1_68_0
+#BOOST_DIR = /home/tannerbitz/Documents/cpp/boost_1_68_0  Tanner's Laptop
+BOOST_DIR = /usr/include/boost_1_70_0
 CXX = g++
 CFLAGS = -std=c++11 -pthread
 INCLUDE = -I/usr/local/include $(BOOST_DIR)

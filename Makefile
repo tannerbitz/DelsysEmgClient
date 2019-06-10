@@ -1,18 +1,27 @@
-BOOST_DIR = /usr/lib/boost_1_70_0
+BOOST_DIR = /home/tannerbitz/Documents/cpp/boost_1_68_0
 CXX = g++
 CFLAGS = -std=c++11 -pthread
 INCLUDE = -I/usr/local/include $(BOOST_DIR)
-LFLAGS = -L/usr/local/lib/ -lboost_system
+LFLAGS = -L/usr/local/lib/ -lboost_system -lpthread -lboost_thread  -lboost_chrono
 
 
-TARGET = tcp_client_emg
+OBJ_DIR =	obj
+SOURCES = 	TrignoClientTest.cpp \
+		 	TrignoEmgClient.cpp
+TARGET 	= 	trigno_client_test
 
-$(TARGET): $(TARGET).o
-	$(CXX) -o $@ $^ $(CFLAGS) $(LFLAGS)
+OBJ 	=	$(SOURCES:%.cpp=$(OBJ_DIR)/%.o)
 
-$(TARGET).o: $(TARGET).cpp
-	$(CXX) $(CFLAGS) -c $< -o $@ $(INCLUDE)
+
+all: $(TARGET)
+
+$(TARGET): $(OBJ)
+	$(CXX) -o $@ $(OBJ) $(CFLAGS) $(LFLAGS)
+
+$(OBJ_DIR)/%.o: %.cpp
+	$(CXX) -c -o $@ $< $(CFLAGS) $(INCLUDE)
+
 
 clean:
-	rm *.o \
+	rm obj/*.o \
 	   $(TARGET)

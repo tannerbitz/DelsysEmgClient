@@ -12,43 +12,49 @@ private:
 
     /* Trigno IP Address */
     std::string _ipAddr;                    // IPv4 address
+    boost::asio::ip::address _addr;
 
     /* Trigno Ports */
-    const std::string _portComm("50040");   // Communication port
-    const std::string _portData("50041");   // EMG data port
+    const unsigned short _portComm = 50040;   // Communication port
+    const unsigned short _portData = 50041;   // EMG data port
+
+    /* Trigno Endpoints */
+    tcp::endpoint _endpointComm;
+    tcp::endpoint _endpointData;
 
     /* Trigno Sockets */
     boost::asio::io_context io_context_comm;
     boost::asio::io_context io_context_data;
-    tcp::resolver _resComm(io_context_comm);
-    tcp::resolver _resData(io_context_data);
-    tcp::socket _sockComm (io_context_comm);
-    tcp::socket _sockData(io_context_data);
+    tcp::socket _sockComm{io_context_comm}; // asynchronous socket
+    tcp::socket _sockData{io_context_data}; // synchronous socket
+
+    /* Data Stream constants */
+    const unsigned short _nSensors = 16;
+    const unsigned short _nBytesPerFloat = 4;
 
     /* Connection Status */
-    bool _connectedData = false;
-    bool _connectedComm = false;
+    bool _connectedDataPort = false;
+    bool _connectedCommPort = false;
 
 	/* Commands */
 	std::map<int, std::string> _cmds;
 
 	/* Reply Variables */
-	const int MAXLENGTH = 1024;
+	static const int MAXLENGTH = 1024;
 	char _replyComm[MAXLENGTH];
 	char _replyData[MAXLENGTH];
 
 	/* Functions */
-	bool ConnectPort(tcp::socket sock,
-                     tcp::resolver res,
-                     std::string port,
-                     std::string portType);
-	void GetReplyComm();
-    void ReceiveDataStream();
+    void GetReplyComm();
+
 public:
 	/* Functions */
     TrignoEmgClient(std::string ipAddr);
     void ConnectDataPort();
     void ConnectCommPort();
 	void SendCommand(int cmd);
+    bool IsCommPortConnected();
+    bool IsDataPortConnected();
+    void ReceiveDataStream();
 
-}
+};

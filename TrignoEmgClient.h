@@ -3,6 +3,8 @@
 #include <stdio.h>
 #include <string>
 #include <map>
+#include <array>
+#include <queue>
 
 using boost::asio::ip::tcp;
 
@@ -36,6 +38,10 @@ private:
     bool _connectedDataPort = false;
     bool _connectedCommPort = false;
 
+    /* Data Queue */
+    std::queue<std::array<float, 16>> _dataQueue;
+    bool _saveDataToQueue = false;
+
 	/* Commands */
 	std::map<int, std::string> _cmds;
 
@@ -46,6 +52,7 @@ private:
 
 	/* Functions */
     void GetReplyComm();
+    std::string RemoveNewlines(std::string str_in);
 
 public:
 	/* Functions */
@@ -56,5 +63,6 @@ public:
     bool IsCommPortConnected();
     bool IsDataPortConnected();
     void ReceiveDataStream();
+    void SetDataQueueSave(bool save);
 
 };

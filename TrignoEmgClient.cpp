@@ -45,6 +45,7 @@ void TrignoEmgClient::ConnectCommPort(){
         _sockComm.connect(_endpointComm);
         printf("Comm socket connected\n");
         _connectedCommPort = true;
+        this->GetReplyComm();
     }
     catch(std::exception& e){
         printf("Exception occured while connecting to Trigno Comm Port\n");
@@ -58,9 +59,10 @@ void TrignoEmgClient::ConnectCommPort(){
 void TrignoEmgClient::SendCommand(int cmdNumber){
 	std::string cmd = _cmds[cmdNumber];
 	if (cmd.compare("") != 0){	// command found
-		printf("Command: %s\n", cmd.c_str());
+		printf("Command: %s\n", RemoveNewlines(cmd).c_str());
     	try{
           _sockComm.send(boost::asio::buffer(cmd.c_str(), strlen(cmd.c_str())));
+          this->GetReplyComm();
         }
         catch (std::exception & e){
           printf("Exception Occured During Write: %s\n", e.what());
@@ -82,38 +84,47 @@ bool TrignoEmgClient::IsDataPortConnected(){
 /* Private Functions */
 void TrignoEmgClient::GetReplyComm(){
     /* Reset reply string and get new reply */
-    memset(_replyComm, 0, std::strlen(_replyComm));
+    memset(_replyComm, 0, sizeof(_replyComm));
     try{
-        boost::asio::socket_base::bytes_readable command(true);
-        _sockComm.io_control(command);
-        size_t bytes_readable = command.get();
-        while (bytes_readable <= 0){
-            printf("Bytes available: %d\n", (int) bytes_readable);
-            boost::this_thread::sleep_for(boost::chrono::milliseconds(50));
-            bytes_readable = command.get();
+        boost::system::error_code ec;
+        size_t n = boost::asio::read(_sockComm,
+                                  boost::asio::buffer(_replyComm),
+                                  boost::asio::transfer_at_least(1),
+                                  ec);
+
+        if (ec){    // error
+            printf("Error occured while receiving comm reply from server\n");
         }
-        _sockComm.receive(boost::asio::buffer(_replyComm, std::strlen(_replyComm)));
+        else{       // no error
+            /* Convert to std::string, find \r\n\r\n, and remove */
+            std::string temp(_replyComm);
+            temp = RemoveNewlines(temp);
 
-        /* Convert to std::string, find \r\n\r\n, and remove */
-        std::string temp(_replyComm);
-        size_t newlineStart = temp.find("\r\n\r\n");
-
-        if (newlineStart != std::string::npos){
-          temp.replace(newlineStart, 4, "");
+            /* Print to command line */
+            printf("Server Reply: %s\n", temp.c_str());
         }
-
-        /* Print to command line */
-        printf("Server Reply: %s\n", temp.c_str());
     }
     catch (std::exception & e){
         printf("Exception Occured During Comm Read: %s\n", e.what());
     }
 }
 
+std::string TrignoEmgClient::RemoveNewlines(std::string str_in){
+    std::string temp;
+    size_t newlineStart = str_in.find("\r\n\r\n");
+    if (newlineStart != std::string::npos){
+        temp = str_in.replace(newlineStart, 4, "");
+    }
+    else{
+        temp = str_in;
+    }
+    return temp;
+
+}
 
 
 void TrignoEmgClient::ReceiveDataStream(){
-    float temp[16];
+    std::array<float,16> temp;
     while (_connectedDataPort){
         /* Receive 16 sensors * 4 bytes/sensor worth of data and handle it */
         memset(_replyComm, 0, sizeof(_replyComm));
@@ -122,30 +133,20 @@ void TrignoEmgClient::ReceiveDataStream(){
                                      boost::asio::buffer(_replyComm),
                                      boost::asio::transfer_exactly(64),
                                      ec);
-        if (ec){
+        if (ec){    // error
             printf("Error occured while reading\n");
             _connectedDataPort = false; // will exit loop
         }
-        else{
-            memcpy(temp, _replyComm, _nSensors*_nBytesPerFloat);
-            // printf("%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f\n",
-            //         temp[0],
-            //         temp[1],
-            //         temp[2],
-            //         temp[3],
-            //         temp[4],
-            //         temp[5],
-            //         temp[6],
-            //         temp[7],
-            //         temp[8],
-            //         temp[9],
-            //         temp[10],
-            //         temp[11],
-            //         temp[12],
-            //         temp[13],
-            //         temp[14],
-            //         temp[15]);
-            printf("%f\n", temp[5]);
+        else{       // no error
+            /* Save to data queue if specified by flag */
+            if (_saveDataToQueue){
+                memcpy(temp.data(), _replyComm, _nSensors*_nBytesPerFloat);
+                _dataQueue.push(temp);
+            }
         }
     }
+}
+
+void TrignoEmgClient::SetDataQueueSave(bool save){
+    _saveDataToQueue = save;
 }

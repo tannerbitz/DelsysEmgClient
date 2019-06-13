@@ -2,8 +2,6 @@
 #include <boost/chrono.hpp>
 #include <boost/thread/thread.hpp>
 #include <thread>
-#include <boost/timer/timer.hpp>
-#include <iostream>
 
 using namespace H5;
 
@@ -242,7 +240,6 @@ void TrignoEmgClient::WriteH5Chunk(){
      * The function writes whatever data in the _dataArr buffer that hasn't been
      * written to the emg dataset.
      */
-     boost::timer::cpu_timer tmr;
     /* Calculate dataset dimensions and offset for writing new chunk */
     if (_firstWrite){
         datasetEmgDims[0]   = chunkRows;
@@ -267,7 +264,6 @@ void TrignoEmgClient::WriteH5Chunk(){
 
     /* write to file */
     datasetEmg.write(_dataArr, PredType::NATIVE_FLOAT, *(mspace), fspace);
-    std::cout << tmr.format() << std::endl;
 }
 
 TrignoEmgClient::~TrignoEmgClient(){

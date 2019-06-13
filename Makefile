@@ -1,9 +1,13 @@
+CXX = g++
 BOOST_DIR = /home/tannerbitz/Documents/cpp/boost_1_68_0 	# Tanner's Laptop
 # BOOST_DIR = /usr/include/boost_1_70_0						# KUKA Computer
-CXX = g++
-CXXFLAGS = -std=c++11 -pthread
-INCLUDE = -I/usr/local/include $(BOOST_DIR)
-LDFLAGS = -L/usr/local/lib/ -lboost_system -lpthread -lboost_thread  -lboost_chrono -lboost_timer
+CXXFLAGS 	= 	-std=c++11 -pthread
+INCLUDE 	= 	-I/usr/local/include $(BOOST_DIR)
+LDFLAGS 	= 	-L/usr/local/lib/ 	\
+				-lboost_system 		\
+				-lpthread 			\
+				-lboost_thread 		\
+				-lboost_chrono
 
 # ---------------- HDF ----------------------
 HDF_INSTALL = /usr/local/hdf5

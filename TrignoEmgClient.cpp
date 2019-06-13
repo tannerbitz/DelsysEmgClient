@@ -24,10 +24,39 @@ TrignoEmgClient::TrignoEmgClient(std::string ipAddr){
 	_cmds[1] = "START\r\n\r\n";
 	_cmds[2] = "STOP\r\n\r\n";
 
-    /* Initialize dataset creation property list */
-    dsPropList.setChunk(rank, chunkDims);       // Allows dataset to be chunked
-
 }
+
+TrignoEmgClient::~TrignoEmgClient(){
+    /* If writing, complete last write */
+    if (_writeFlag){
+        StopWriting();
+    }
+    /* If receiving data, stop receiving */
+    if (_connectedDataPort){
+        StopReceiveDataStream();
+    }
+
+    /* Close hdf5 variables and free memory if necessary */
+    mspace.close();
+    datasetEmg.close();
+}
+
+void TrignoEmgClient::SetEmgToSave(int emgList[], int nEmgSensors){
+    try{
+        _emgList = new int[nEmgSensors];
+        for (int i=0; i<nEmgSensors; i++){
+            _emgList[i] = emgList[i];
+        }
+        _nActiveEmgSensors = nEmgSensors;
+    }
+    catch(std::exception & e){
+        delete _emgList;
+        _emgList = NULL;
+        _nActiveEmgSensors = _nSensors;
+        printf("Error while Setting Emg List: %s\n", e.what());
+    }
+}
+
 
 void TrignoEmgClient::ConnectDataPort(){
     /*
@@ -159,13 +188,28 @@ void TrignoEmgClient::ReceiveDataStream(){
      * Don't forget to rejoin the thread at the end of the script! code: t.join();
      */
     std::array<float,16> temp;
+    int bytesAvailable = 0;
+    int samplesAvailable = 0;
+    _rowCount = 0;
+    int rowsFreeInBuff = chunkRows - _rowCount;
+    int readBytes = 0;
     while (_connectedDataPort){
         /* Receive 16 sensors * 4 bytes/sensor worth of data and handle it */
-        memset(_replyComm, 0, sizeof(_replyComm));
+        memset(_replyData, 0, sizeof(_replyData));
         boost::system::error_code ec;
+        bytesAvailable = (int) _sockData.available();
+        samplesAvailable = (int) (bytesAvailable/(_nSensors*_nBytesPerFloat));
+        if (samplesAvailable > rowsFreeInBuff){
+            samplesAvailable = rowsFreeInBuff;
+        }
+        readBytes = samplesAvailable*(_nSensors*_nBytesPerFloat);
+        if (readBytes > MAXDATALENGTH){
+            readBytes = MAXDATALENGTH;
+        }
+
         size_t n = boost::asio::read(_sockData,
-                                     boost::asio::buffer(_replyComm),
-                                     boost::asio::transfer_exactly(64),
+                                     boost::asio::buffer(_replyData),
+                                     boost::asio::transfer_exactly(readBytes),
                                      ec);
         if (ec){    // error
             printf("Error occured while reading\n");
@@ -174,12 +218,13 @@ void TrignoEmgClient::ReceiveDataStream(){
         else{       // no error
             /* Save to data queue if specified by flag */
             if (_writeFlag){
-                memcpy(&(_dataArr[_rowCount][0]), _replyComm, _nSensors*_nBytesPerFloat);
-                _rowCount++;
+                memcpy(&(_dataArr[_rowCount][0]), _replyComm, n);
+                _rowCount += samplesAvailable;
                 if (_rowCount == chunkRows){
                     WriteH5Chunk();
                     _rowCount = 0;
                 }
+                rowsFreeInBuff = chunkRows - _rowCount;
             }
 
         }
@@ -194,16 +239,30 @@ void TrignoEmgClient::StartWriting(H5Location * h5loc){
      * h5object where the dataemg will be made. This can either be a Group or File obj.
      */
 
+     /* Check if already writing */
+     if (_writeFlag){
+         printf("EMG is already being written.  Current write must be stopped before new write can start.\n");
+         return;
+     }
 
-    /* Check if already writing */
-    if (_writeFlag){
-        printf("EMG is already being written.  Current write must be stopped before new write can start.\n");
-        return;
-    }
+     /* file space */
+     fspaceOffset[0]    = 0;
+     fspaceOffset[1]    = 0;
+     fspaceDims[0]      = 1;
+     fspaceDims[1]      = _nActiveEmgSensors;
+     fspaceMaxDims[0]   = H5S_UNLIMITED;
+     fspaceMaxDims[1]   = _nActiveEmgSensors;
+     fspace = DataSpace(rank, fspaceDims, fspaceMaxDims);
 
-    /* Setup H5 Variables. Create EMG dataset */
-    fspaceOffset[0] = 0;
-    fspaceOffset[1] = 0;
+     /* write space */
+     writespaceDims[1]  = _nActiveEmgSensors;
+
+     /* Set chunk size in dataset creation property list */
+     chunkDims[0]       = chunkRows;
+     chunkDims[1]       = _nActiveEmgSensors;
+     dsPropList.setChunk(rank, chunkDims);       // Allows dataset to be chunked
+
+    /* Create EMG dataset */
     std::string datasetNameBase = "EMG_";
     int datasetNum = 0;
     std::string datasetName = datasetNameBase + std::to_string(datasetNum);
@@ -215,9 +274,9 @@ void TrignoEmgClient::StartWriting(H5Location * h5loc){
         locationExist = h5loc->exists(datasetName);
     }
     datasetEmg = h5loc->createDataSet(datasetName,
-                                    PredType::NATIVE_FLOAT,
-                                    *(mspace),
-                                    dsPropList);
+                                      PredType::NATIVE_FLOAT,
+                                      fspace,
+                                      dsPropList);
 
     /* Reset data queues, counters, and flags */
     memset(_dataArr, 0, sizeof(float)*chunkRows*_nSensors);
@@ -242,44 +301,44 @@ void TrignoEmgClient::WriteH5Chunk(){
      */
     /* Calculate dataset dimensions and offset for writing new chunk */
     if (_firstWrite){
-        datasetEmgDims[0]   = chunkRows;
+        fspaceDims[0]       = (hsize_t) _rowCount;
         fspaceOffset[0]     = 0;
         _firstWrite         = false;
     }
     else{
-        datasetEmgDims[0]   += (hsize_t) _rowCount;   // add necessary rows
+        fspaceDims[0]       += (hsize_t) _rowCount;   // add necessary rows
         fspaceOffset[0]     += (hsize_t) chunkRows;
     }
 
     /* extend dataset */
-    datasetEmg.extend(datasetEmgDims);
+    datasetEmg.extend(fspaceDims);
 
     /* specify where in the file dataspace to place new samples */
-    writespaceDims[0] = datasetEmgDims[0] - fspaceOffset[0];
-    DataSpace fspace = datasetEmg.getSpace();
+    writespaceDims[0] = fspaceDims[0] - fspaceOffset[0];
+    fspace = datasetEmg.getSpace();
     fspace.selectHyperslab(H5S_SELECT_SET, writespaceDims, fspaceOffset);
 
     /* specify where in the memory dataspace to get the new samples */
-    mspace->selectHyperslab(H5S_SELECT_SET, writespaceDims, noOffset);
+    mspace.selectNone();
+    if (_nActiveEmgSensors != 16){
+      hsize_t colDims[rank]   = {(hsize_t) _rowCount, 1};
+      hsize_t offset[rank]    = {0, 0};
+      /* select column by column */
+      for (int i = 0; i<_nActiveEmgSensors; i++){
+          offset[1] = _emgList[i] - 1;
+          printf("trying to select emg: %d  ind: %d\n", (int) _emgList[i], (int) offset[1]);
+          mspace.selectHyperslab(H5S_SELECT_OR, colDims, offset);
+          printf("Number of hyperslab blocks: %d   nPoints: %d\n",
+                (int) mspace.getSelectHyperNblocks(),
+                (int) mspace.getSelectNpoints());
+      }
+    }
+    else{
+      mspace.selectAll();
+    }
 
     /* write to file */
-    datasetEmg.write(_dataArr, PredType::NATIVE_FLOAT, *(mspace), fspace);
-}
-
-TrignoEmgClient::~TrignoEmgClient(){
-    /* If writing, complete last write */
-    if (_writeFlag){
-        StopWriting();
-    }
-    /* If receiving data, stop receiving */
-    if (_connectedDataPort){
-        StopReceiveDataStream();
-    }
-
-    /* Close hdf5 variables and free memory if necessary */
-    mspace->close();
-    delete mspace;
-    datasetEmg.close();
+    datasetEmg.write(_dataArr, PredType::NATIVE_FLOAT, mspace, fspace);
 }
 
 void TrignoEmgClient::StopReceiveDataStream(){

@@ -21,11 +21,13 @@ int main(int argc, char** argv){
     client->ConnectDataPort();
     client->ConnectCommPort();
 
+
     /* Send start command */
     if (client->IsCommPortConnected()){
 
         H5File * file = 0;
         std::string filename = "myhdf.h5";
+        // Exception::dontPrint();
         try{
             /* Open file if it exists */
             file = new H5File(filename.c_str(), H5F_ACC_RDWR);
@@ -36,11 +38,15 @@ int main(int argc, char** argv){
         }
 
         client->SendCommand(1);
-        client->StartWriting(file);
+        int nEmgs = 3;
+        int emgList[nEmgs] = {2,3,5};
+        client->SetEmgToSave(emgList, nEmgs);
         std::thread t(&TrignoEmgClient::ReceiveDataStream, client);
         sleep(10);
-        client->StopReceiveDataStream();
+        client->StartWriting(file);
+        sleep(20);
         client->StopWriting();
+        client->StopReceiveDataStream();
         sleep(1);
         delete client;
         file->close();

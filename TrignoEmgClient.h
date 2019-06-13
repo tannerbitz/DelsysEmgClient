@@ -41,17 +41,18 @@ private:
     bool _connectedCommPort = false;
 
     /* HDF5 Variables */
-    static const int rank = 2;
-    static const int chunkRows = 10000;
-    const hsize_t chunkDims[rank]   = {(hsize_t) chunkRows, (hsize_t) _nSensors};   // dataset dimensions at creation
-    const hsize_t maxDims[rank]     = {H5S_UNLIMITED, H5S_UNLIMITED};
-    hsize_t datasetEmgDims[rank]    = {(hsize_t) chunkRows, (hsize_t) _nSensors};
+    static const int rank           = 2;
+    static const int chunkRows      = 10000;
+    hsize_t chunkDims[rank]         = {(hsize_t) chunkRows, (hsize_t) _nSensors};   // dataset dimensions at creation
+    hsize_t fspaceMaxDims[rank]     = {   H5S_UNLIMITED   , (hsize_t) _nSensors};
+    hsize_t fspaceDims[rank]        = {(hsize_t) chunkRows, (hsize_t) _nSensors};
     hsize_t writespaceDims[rank]    = {(hsize_t) chunkRows, (hsize_t) _nSensors};
     hsize_t fspaceOffset[rank]      = {0,0};                                        // offset must be kept track of to append in correct places
     const hsize_t noOffset[rank]    = {0,0};
 
-    DataSpace * mspace      = new DataSpace(rank, chunkDims, maxDims);        // memory space                                 // file space
-    DataSet datasetEmg      = DataSet();                                   // emg dataset
+    DataSpace mspace    = DataSpace(rank, chunkDims, fspaceMaxDims);
+    DataSpace fspace    = DataSpace(rank, chunkDims, fspaceMaxDims);        // memory space                                 // file space
+    DataSet datasetEmg  = DataSet();                                   // emg dataset
     DSetCreatPropList dsPropList;               // Dataset Creation Property List
     bool _firstWrite;
 
@@ -65,8 +66,13 @@ private:
 
 	/* Reply Variables */
 	static const int MAXLENGTH = 1024;
+    static const int MAXDATALENGTH = 64000;  // 1000 rows * 16 floats * 4 bytes per float
 	char _replyComm[MAXLENGTH];
-	char _replyData[MAXLENGTH];
+	char _replyData[MAXDATALENGTH];
+
+    /* Emg List */
+    int * _emgList;
+    int _nActiveEmgSensors = 16;
 
 	/* Functions */
     void GetReplyComm();
@@ -77,6 +83,7 @@ public:
 	/* PUBLIC FUNCTIONS */
     TrignoEmgClient(std::string ipAddr);            // Constructor
     ~TrignoEmgClient();                             // Destructor
+    void SetEmgToSave(int emgList[], int nEmgs);
     /* Connect Ports */
     void ConnectDataPort();
     void ConnectCommPort();

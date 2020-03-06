@@ -1,9 +1,11 @@
 CXX = g++
+
+# ---------------- Boost ----------------------
 BOOST_DIR = /home/tannerbitz/Documents/cpp/boost_1_68_0 	# Tanner's Laptop
 # BOOST_DIR = /usr/include/boost_1_70_0						# KUKA Computer
-CXXFLAGS 	= 	-std=c++11 -pthread
-INCLUDE 	= 	-I/usr/local/include $(BOOST_DIR)
-LDFLAGS 	= 	-L/usr/local/lib/ 	\
+CXXFLAGS 	+= 	-std=c++11 -pthread
+BOOST_INC 	= 	-I/usr/local/include $(BOOST_DIR)
+BOOST_LIB 	= 	-L/usr/local/lib/ 	\
 				-lboost_system 		\
 				-lpthread 			\
 				-lboost_thread 		\
@@ -19,12 +21,11 @@ HDF_LIBS 	= -L$(HDF_LIB)	\
 			  -lhdf5 		\
 			  -lz			\
 			  -lm 			\
-			  -ldl			\
-			  #-lsz
+			  -ldl
 
 # ------------------------------------------
-INCLUDE += $(HDF_INCLUDE)
-LDFLAGS += $(HDF_LIBS)
+INCLUDE += $(HDF_INCLUDE) $(BOOST_INC)
+LDFLAGS += $(HDF_LIBS) $(BOOST_LIB)
 
 OBJ_DIR =	obj
 SOURCES = 	TrignoClientTest.cpp \
